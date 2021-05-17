@@ -1,10 +1,17 @@
+variable "landing_user_public_key" {
+  type = string
+}
+variable "landing_wordpress_page_nginx_conf" {
+  type = string
+}
+
 resource "aws_instance" "LandingPageInstance" {
   ami           = "ami-00399ec92321828f5"
   key_name = "main-key"
-  instance_type = "t2.micro"
+  instance_type = "t2.medium"
   availability_zone = "us-east-2a"
   tags= {
-    Name = "wp_instance"
+    Name = "web_instance"
   }
   network_interface {
     device_index = 0
@@ -25,6 +32,17 @@ resource "aws_instance" "LandingPageInstance" {
               apt-get update
               apt-get -y install unzip zip nginx php7.4 php7.4-mysql php7.4-fpm php7.4-mbstring php7.4-xml php7.4-curl
               apt-get -y install composer
+              sudo adduser landing --disabled-password --gecos ''
+              sudo mkdir -p /home/landing/.ssh
+              sudo touch /home/landing/.ssh/authorized_keys              
+              echo "${var.landing_user_public_key}" \
+              >> /home/landing/.ssh/authorized_keys
+              sudo chown -R landing:landing /home/landing/.ssh
+              sudo chmod 700 /home/landing/.ssh
+              sudo chmod 600 /home/landing/.ssh/authorized_keys
+              sudo usermod -aG sudo landing
+              echo "${var.landing_wordpress_page_nginx_conf}" >> /etc/nginx/sites-available/default
+              sudo service nginx reload
               EOF
 }
 
@@ -106,6 +124,14 @@ resource "aws_security_group" "allow_web" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "MYSQL"
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
  # outbound from jenkis server
   egress {
     from_port   = 0
@@ -131,7 +157,7 @@ resource "aws_network_interface" "web-server-nic" {
 #  vpc      = true
 #  instance = aws_instance.LandingPageInstance.id
 # tags= {
-#    Name = "wp_elstic_ip"
+#    Name = "web_elstic_ip"
 #  }
 #}
 
