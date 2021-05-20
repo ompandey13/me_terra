@@ -5,6 +5,11 @@ variable "landing_wordpress_page_nginx_conf" {
   type = string
 }
 
+variable "private_cidrs" {}
+
+# Query all avilable Availibility Zone
+data "aws_availability_zones" "available" {}
+
 resource "aws_instance" "LandingPageInstance" {
   ami           = "ami-00399ec92321828f5"
   key_name = "main-key"
@@ -12,6 +17,9 @@ resource "aws_instance" "LandingPageInstance" {
   availability_zone = "us-east-2a"
   tags= {
     Name = "web_instance"
+  }
+  root_block_device {
+    volume_size = 40 # GB
   }
   network_interface {
     device_index = 0
@@ -88,6 +96,18 @@ resource "aws_subnet" "subnet-1" {
   }
 }
 
+# Private Subnet
+resource "aws_subnet" "private_subnet" {
+  count             = 2
+  cidr_block        = var.private_cidrs[count.index]
+  vpc_id            = aws_vpc.prod-vpc.id
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    Name = "private-subnet.${count.index + 1}"
+  }
+}
+
 # Associate subnet with Route table
 resource "aws_route_table_association" "a" {
   subnet_id      = aws_subnet.subnet-1.id
@@ -128,6 +148,14 @@ resource "aws_security_group" "allow_web" {
     description = "MYSQL"
     from_port   = 3306
     to_port     = 3306
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "POSTGRES"
+    from_port   = 5432
+    to_port     = 5432
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
